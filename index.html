@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مترجم الكاميرا الفوري</title>
+    <script src="https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #f4f4f9; margin: 0; padding: 20px; }
+        #video-container { position: relative; display: inline-block; width: 100%; max-width: 500px; border: 5px solid #333; border-radius: 10px; overflow: hidden; }
+        video { width: 100%; display: block; }
+        canvas { display: none; }
+        #output { margin-top: 20px; padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); min-height: 100px; }
+        .status { color: #007bff; font-weight: bold; }
+        button { background: #28a745; color: white; border: none; padding: 15px 30px; font-size: 18px; border-radius: 5px; cursor: pointer; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <h2>مترجم الكاميرا (عربي - إنجليزي)</h2>
+    
+    <div id="video-container">
+        <video id="video" autoplay playsinline></video>
+    </div>
+
+    <br>
+    <button id="capture">التقاط وترجمة النص</button>
+
+    <div id="output">
+        <p class="status" id="status">جاهز... وجه الكاميرا واضغط الزر</p>
+        <div id="text-ar"><strong>النص العربي:</strong> <span>...</span></div>
+        <hr>
+        <div id="text-en"><strong>الترجمة الإنجليزية:</strong> <span style="color: blue;">...</span></div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const video = document.getElementById('video');
+        const captureBtn = document.getElementById('capture');
+        const status = document.getElementById('status');
+        const textAr = document.querySelector('#text-ar span');
+        const textEn = document.querySelector('#text-en span');
+        const canvas = document.getElementById('canvas');
+
+        // 1. تشغيل الكاميرا
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+            .then(stream => { video.srcObject = stream; })
+            .catch(err => { 
+                status.innerText = "خطأ في الوصول للكاميرا: " + err; 
+            });
+
+        // 2. وظيفة المعالجة
+        captureBtn.addEventListener('click', () => {
+            status.innerText = "جاري قراءة النص العربي (انتظر ثوانٍ)...";
+            
+            // رسم لقطة من الفيديو على الـ Canvas
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+
+            // 3. استخدام Tesseract للتعرف على النص العربي
+            Tesseract.recognize(
+                canvas.toDataURL('image/png'),
+                'ara', // لغة التعرف: العربية
+                { logger: m => console.log(m) }
+            ).then(({ data: { text } }) => {
+                if(!text.trim()) {
+                    status.innerText = "لم يتم العثور على نص واضح، حاول مرة أخرى.";
+                    return;
+                }
+                textAr.innerText = text;
+                translateText(text);
+            });
+        });
+
+        // 4. وظيفة الترجمة باستخدام MyMemory API
+        function translateText(text) {
+            status.innerText = "جاري الترجمة...";
+            const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=ar|en`;
+
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    textEn.innerText = data.responseData.translatedText;
+                    status.innerText = "تمت الترجمة بنجاح!";
+                })
+                .catch(err => {
+                    status.innerText = "فشلت الترجمة.";
+                    console.error(err);
+                });
+        }
+    </script>
+</body>
+</html>
+
